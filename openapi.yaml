@@ -19,7 +19,7 @@ servers:
 
 tags:
   - name: IAM
-    description: Identity management — user registration, activation and deletion
+    description: Identity management — user registration, activation, login and deletion
 
 paths:
 
@@ -112,6 +112,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetail'
 
+  /iam/users/login:
+    post:
+      tags:
+        - IAM
+      summary: Log in a user
+      description: |
+        Authenticates a user with e-mail and password.
+        Returns a JWT access token on success.
+        Returns 401 if the credentials are invalid and 403 if the account is not yet activated.
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: "jan.kowalski@example.com"
+              password: "Secret@123"
+      responses:
+        '200':
+          description: Login successful — JWT access token returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Invalid input data (validation errors)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                status: 400
+                title: Bad Request
+                detail: "Validation failed for object='loginRequest'"
+                errors:
+                  email: "must be a well-formed email address"
+        '401':
+          description: Invalid e-mail or password
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                status: 401
+                title: Unauthorized
+                detail: "Invalid email or password"
+        '403':
+          description: Account is not activated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                status: 403
+                title: Forbidden
+                detail: "Account is not activated"
+
   /iam/users/{id}:
     delete:
       tags:
@@ -187,6 +248,36 @@ components:
           description: User's second surname (optional)
           nullable: true
           example: null
+
+    LoginRequest:
+      type: object
+      description: Credentials required to log in
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          description: User e-mail address
+          example: "jan.kowalski@example.com"
+        password:
+          type: string
+          description: User password
+          minLength: 8
+          maxLength: 64
+          example: "Secret@123"
+
+    LoginResponse:
+      type: object
+      description: Response returned after a successful login
+      required:
+        - accessToken
+      properties:
+        accessToken:
+          type: string
+          description: JWT Bearer access token
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
 
     UuidResponse:
       type: object
