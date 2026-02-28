@@ -1,0 +1,6 @@
+// Submoduł api-spec — źródło prawdy dla kontraktu OpenAPI
+// Nie zawiera kodu Java — tylko plik openapi.yaml
+// Może być w przyszłości osobnym repozytorium / opublikowany jako artefakt Maven
+
+description = 'DocExpress API Contract (OpenAPI 3.0 specification)'
+

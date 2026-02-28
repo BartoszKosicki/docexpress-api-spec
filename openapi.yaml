@@ -1,0 +1,237 @@
+openapi: 3.0.3
+
+info:
+  title: DocExpress API
+  description: |
+    REST API dla systemu **DocExpress** — zarządzanie tożsamością użytkowników (IAM).
+
+    ## Konwencje
+    - Wszystkie ścieżki są poprzedzone prefiksem `/v1`
+    - Błędy zwracane są w formacie **RFC 7807 Problem Details**
+    - Uwierzytelnianie: Bearer JWT (planowane)
+  version: 1.0.0
+  contact:
+    name: DocExpress Team
+
+servers:
+  - url: /v1
+    description: Lokalny serwer deweloperski
+
+tags:
+  - name: IAM
+    description: Zarządzanie tożsamością — rejestracja, aktywacja i usuwanie użytkowników
+
+paths:
+
+  /iam/users/registration:
+    post:
+      tags:
+        - IAM
+      summary: Rejestracja nowego użytkownika
+      description: |
+        Tworzy nowe konto użytkownika w systemie.
+        Po pomyślnej rejestracji użytkownik otrzymuje e-mail z linkiem aktywacyjnym.
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequest'
+            example:
+              password: "Secret@123"
+              email: "jan.kowalski@example.com"
+              firstName: "Jan"
+              secondName: null
+              surname: "Kowalski"
+              secondSurname: null
+      responses:
+        '201':
+          description: Użytkownik został pomyślnie zarejestrowany
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UuidResponse'
+              example:
+                uuid: "550e8400-e29b-41d4-a716-446655440000"
+        '400':
+          description: Nieprawidłowe dane wejściowe (błędy walidacji)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                status: 400
+                title: Bad Request
+                detail: Validation failed for object='registerUserRequest'
+                errors:
+                  password: "Password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character (@$!%*?&)"
+                  email: "must be a well-formed email address"
+        '409':
+          description: Użytkownik z podanym adresem e-mail już istnieje
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                status: 409
+                title: Conflict
+                detail: "User with email jan.kowalski@example.com already exists"
+
+  /iam/users/activation:
+    get:
+      tags:
+        - IAM
+      summary: Aktywacja konta użytkownika
+      description: |
+        Aktywuje konto użytkownika na podstawie tokenu otrzymanego w e-mailu aktywacyjnym.
+        Token jest jednorazowy i wygasa po określonym czasie.
+      operationId: activateUser
+      parameters:
+        - name: token
+          in: query
+          required: true
+          description: Jednorazowy token aktywacyjny z e-maila
+          schema:
+            type: string
+            minLength: 1
+          example: "abc123def456"
+      responses:
+        '200':
+          description: Konto zostało pomyślnie aktywowane
+        '400':
+          description: Token jest nieprawidłowy lub wygasł
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Token nie został znaleziony
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /iam/users/{id}:
+    delete:
+      tags:
+        - IAM
+      summary: Usunięcie użytkownika
+      description: Trwale usuwa konto użytkownika o podanym identyfikatorze UUID.
+      operationId: deleteUser
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unikalny identyfikator UUID użytkownika
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '204':
+          description: Użytkownik został pomyślnie usunięty
+        '404':
+          description: Użytkownik o podanym identyfikatorze nie istnieje
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+components:
+  schemas:
+
+    RegisterUserRequest:
+      type: object
+      description: Dane wymagane do rejestracji nowego użytkownika
+      required:
+        - password
+        - email
+        - firstName
+        - surname
+      properties:
+        password:
+          type: string
+          description: |
+            Hasło użytkownika. Musi zawierać co najmniej:
+            - 1 wielką literę
+            - 1 małą literę
+            - 1 cyfrę
+            - 1 znak specjalny (@$!%*?&)
+          minLength: 8
+          maxLength: 64
+          pattern: '^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,64}$'
+          example: "Secret@123"
+        email:
+          type: string
+          format: email
+          description: Adres e-mail użytkownika (unikalny w systemie)
+          example: "jan.kowalski@example.com"
+        firstName:
+          type: string
+          description: Pierwsze imię użytkownika
+          minLength: 1
+          example: "Jan"
+        secondName:
+          type: string
+          description: Drugie imię użytkownika (opcjonalne)
+          nullable: true
+          example: null
+        surname:
+          type: string
+          description: Nazwisko użytkownika
+          minLength: 1
+          example: "Kowalski"
+        secondSurname:
+          type: string
+          description: Drugie nazwisko użytkownika (opcjonalne)
+          nullable: true
+          example: null
+
+    UuidResponse:
+      type: object
+      description: Odpowiedź zawierająca UUID nowo utworzonego zasobu
+      required:
+        - uuid
+      properties:
+        uuid:
+          type: string
+          format: uuid
+          description: Unikalny identyfikator UUID zasobu
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    ProblemDetail:
+      type: object
+      description: Szczegóły błędu zgodne z RFC 7807 (Problem Details for HTTP APIs)
+      properties:
+        status:
+          type: integer
+          description: Kod statusu HTTP
+          example: 400
+        title:
+          type: string
+          description: Krótki, czytelny tytuł problemu
+          example: "Bad Request"
+        detail:
+          type: string
+          description: Szczegółowy opis problemu zrozumiały dla człowieka
+          example: "Validation failed for object='registerUserRequest'"
+        type:
+          type: string
+          format: uri
+          description: URI identyfikujący typ problemu
+          example: "about:blank"
+        instance:
+          type: string
+          format: uri
+          description: URI identyfikujący konkretne wystąpienie problemu
+          example: "/v1/iam/users/registration"
+        errors:
+          type: object
+          description: Mapa błędów walidacji (pole → komunikat błędu)
+          additionalProperties:
+            type: string
+          example:
+            email: "must be a well-formed email address"
+            password: "Password must contain at least one uppercase letter"
+
