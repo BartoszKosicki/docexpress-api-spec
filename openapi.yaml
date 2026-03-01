@@ -3,7 +3,7 @@ openapi: 3.0.3
 info:
   title: DocExpress API
   description: |
-    REST API for the **DocExpress** system — Identity and Access Management (IAM).
+    REST API for the **DocExpress** system - Identity and Access Management (IAM).
 
     ## Conventions
     - All paths are prefixed with `/v1`
@@ -19,7 +19,7 @@ servers:
 
 tags:
   - name: IAM
-    description: Identity management — user registration, activation, login and deletion
+    description: Identity management - user registration, activation, login and deletion
 
 paths:
 
@@ -133,7 +133,7 @@ paths:
               password: "Secret@123"
       responses:
         '200':
-          description: Login successful — JWT access token returned
+          description: Login successful - JWT access token returned
           content:
             application/json:
               schema:
