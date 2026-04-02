@@ -22,8 +22,60 @@ tags:
     description: Identity management - user registration, activation, login and deletion
   - name: Company
     description: Company management - registration, organs, shareholders and compliance
+  - name: KRS
+    description: KRS data retrieval – upload PDF document and extract company data
 
 paths:
+
+  /krs/upload-pdf:
+    post:
+      tags:
+        - KRS
+      summary: Upload KRS PDF document
+      description: |
+        Accepts a KRS document in PDF format (multipart/form-data).
+        Saves the file and returns a `fileId` that can be used to track processing status.
+        In future phases the file will be split into sections, sent to an AI handler
+        and the parsed data returned as `KrsCompanyData`.
+      operationId: uploadKrsPdf
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: KRS document in PDF format (max 10 MB)
+      responses:
+        '201':
+          description: File saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KrsUploadResponse'
+              example:
+                fileId: "550e8400-e29b-41d4-a716-446655440000"
+        '400':
+          description: Missing file or unsupported content type (only application/pdf accepted)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                status: 400
+                title: Bad Request
+                detail: "Only PDF files are accepted"
+        '500':
+          description: Internal server error while saving the file
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
 
   /iam/users/registration:
     post:
@@ -121,7 +173,8 @@ paths:
       summary: Log in a user
       description: |
         Authenticates a user with e-mail and password.
-        Returns a JWT access token on success.
+        On success, sets an HttpOnly cookie `accessToken` with the JWT.
+        Returns only `id` and `email` in the response body – the token is NOT included.
         Returns 401 if the credentials are invalid and 403 if the account is not yet activated.
       operationId: loginUser
       requestBody:
@@ -135,13 +188,20 @@ paths:
               password: "Secret@123"
       responses:
         '200':
-          description: Login successful - JWT access token returned
+          description: Login successful - JWT set as HttpOnly cookie
+          headers:
+            Set-Cookie:
+              description: HttpOnly session cookie containing the JWT access token
+              schema:
+                type: string
+                example: "accessToken=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600"
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
               example:
-                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                email: "jan.kowalski@example.com"
         '400':
           description: Invalid input data (validation errors)
           content:
@@ -174,6 +234,54 @@ paths:
                 status: 403
                 title: Forbidden
                 detail: "Account is not activated"
+
+  /iam/users/me:
+    get:
+      tags:
+        - IAM
+      summary: Get current user
+      description: |
+        Returns data of the currently authenticated user.
+        Reads the `accessToken` HttpOnly cookie sent automatically by the browser.
+        Returns 401 if the cookie is missing or the token is expired/invalid.
+      operationId: getMe
+      security:
+        - cookieAuth: [ ]
+      responses:
+        '200':
+          description: User data returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                email: "jan.kowalski@example.com"
+        '401':
+          description: No active session or token expired
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+  /iam/users/logout:
+    post:
+      tags:
+        - IAM
+      summary: Log out a user
+      description: |
+        Clears the `accessToken` HttpOnly cookie by setting `Max-Age=0`.
+        The browser will immediately remove the cookie.
+      operationId: logoutUser
+      responses:
+        '204':
+          description: Logged out successfully
+          headers:
+            Set-Cookie:
+              description: Cookie cleared (Max-Age=0)
+              schema:
+                type: string
+                example: "accessToken=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
 
   /iam/users/{id}:
     delete:
@@ -396,14 +504,41 @@ components:
 
     LoginResponse:
       type: object
-      description: Response returned after a successful login
+      description: |
+        Response returned after a successful login.
+        The JWT access token is NOT included in the body – it is set as an HttpOnly cookie.
       required:
-        - accessToken
+        - id
+        - email
       properties:
-        accessToken:
+        id:
           type: string
-          description: JWT Bearer access token
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          format: uuid
+          description: UUID of the authenticated user
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        email:
+          type: string
+          format: email
+          description: E-mail address of the authenticated user
+          example: "jan.kowalski@example.com"
+
+    MeResponse:
+      type: object
+      description: Data of the currently authenticated user, extracted from the HttpOnly cookie JWT.
+      required:
+        - id
+        - email
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID of the authenticated user
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        email:
+          type: string
+          format: email
+          description: E-mail address of the authenticated user
+          example: "jan.kowalski@example.com"
 
     UuidResponse:
       type: object
@@ -956,4 +1091,26 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RoleConflictDto'
+
+    # ── KRS ──────────────────────────────────────────────────────────────────
+
+    KrsUploadResponse:
+      type: object
+      description: Response returned after a KRS PDF file is saved successfully
+      required:
+        - fileId
+      properties:
+        fileId:
+          type: string
+          format: uuid
+          description: Unique identifier of the saved file, used to track processing status
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: accessToken
+      description: HttpOnly JWT cookie set after successful login via POST /iam/users/login
+
 
