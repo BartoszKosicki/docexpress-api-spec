@@ -359,6 +359,7 @@ paths:
                   gender: "M"
                   firstName: "Jan"
                   surname: "Kowalski"
+                  pesel: "90010112345"
                   isForeigner: false
                   sharesCount: 100
                   shareBaseValue: 50.00
@@ -777,17 +778,10 @@ components:
           type: string
           nullable: true
           example: null
-        nip:
-          type: string
-          nullable: true
-          example: null
         regon:
           type: string
           nullable: true
           example: null
-        address:
-          $ref: '#/components/schemas/AddressRequest'
-          nullable: true
         sharesCount:
           type: integer
           minimum: 1
