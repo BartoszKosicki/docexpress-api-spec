@@ -516,6 +516,68 @@ paths:
                 title: Not Found
                 detail: "Company not found"
 
+  /companies/{id}/shareholders:
+    get:
+      tags:
+        - Company
+      summary: Get active shareholders with share percentages
+      description: |
+        Returns the list of active shareholders for a given company.
+        Each entry contains a merged `name` field:
+        - **natural person** – `firstName secondName surname secondSurname` (blanks skipped)
+        - **legal entity** – company name
+
+        `sharePercent` is calculated against the current share capital (`sharesCountTotal`),
+        rounded to 2 decimal places. Returns `0.0` when capital data is not yet available.
+      operationId: getCompanyShareholders
+      security:
+        - cookieAuth: [ ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique UUID identifier of the company
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: List of active shareholders returned (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ShareholderSummaryDto'
+              example:
+                - id: "aaaaaaaa-0000-0000-0000-000000000001"
+                  name: "Jan Kowalski"
+                  shareholderType: "natural"
+                  sharesCount: 50
+                  sharePercent: 50.0
+                - id: "bbbbbbbb-0000-0000-0000-000000000002"
+                  name: "Beta Investments SA"
+                  shareholderType: "legal"
+                  sharesCount: 50
+                  sharePercent: 50.0
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Company not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                status: 404
+                title: Not Found
+                detail: "Company not found"
+
   /companies/{id}:
     get:
       tags:
@@ -1441,6 +1503,47 @@ components:
           description: Active liquidators (function LIKWIDATOR from the board_members table)
           items:
             $ref: '#/components/schemas/CompanyMemberDto'
+
+    ShareholderSummaryDto:
+      type: object
+      description: |
+        Summary of a single active shareholder.
+        `name` is the full display name:
+        - natural person: `firstName secondName surname secondSurname` (blanks skipped)
+        - legal entity: company name
+        `sharePercent` is rounded to 2 decimal places and based on the current `sharesCountTotal`.
+      required:
+        - id
+        - name
+        - shareholderType
+        - sharesCount
+        - sharePercent
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID of the shareholder record
+          example: "aaaaaaaa-0000-0000-0000-000000000001"
+        name:
+          type: string
+          description: Merged full name (natural person) or company name (legal entity)
+          example: "Jan Adam Kowalski"
+        shareholderType:
+          type: string
+          enum:
+            - natural
+            - legal
+          description: Type of shareholder
+          example: "natural"
+        sharesCount:
+          type: integer
+          description: Number of shares held
+          example: 50
+        sharePercent:
+          type: number
+          format: double
+          description: Percentage share of total capital, rounded to 2 decimal places
+          example: 50.0
 
     # ── KRS ──────────────────────────────────────────────────────────────────
 
