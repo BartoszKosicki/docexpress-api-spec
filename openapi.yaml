@@ -403,14 +403,55 @@ paths:
                 status: 422
                 title: Unprocessable Entity
                 detail: "Different name for same PESEL"
+    get:
+      tags:
+        - Company
+      summary: List companies for current user
+      description: |
+        Returns a list of companies owned by the currently authenticated user.
+        Each item contains an aggregated `companyStatus` computed in a single SQL CTE:
+        - `"ok"` – all data complete and consistent
+        - `"warning"` – incomplete personal data or supervisory board with fewer than 3 members and a conflict (art. 209 KSH)
+        - `"danger"` – board missing / shares do not balance / prohibited combination (art. 214 KSH)
+      operationId: listCompanies
+      security:
+        - cookieAuth: [ ]
+      responses:
+        '200':
+          description: List of companies returned (may be empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CompanyListItemDto'
+              example:
+                - id: "550e8400-e29b-41d4-a716-446655440000"
+                  name: "Testowa Sp. z o.o."
+                  nip: "1234567890"
+                  companyStatus: "ok"
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+
+
 
   /companies/{id}:
     get:
       tags:
         - Company
-      summary: Get company details
-      description: Returns full company details including board members, supervisory board, shareholders and active role conflicts.
-      operationId: getCompany
+      summary: Get company home view
+      description: |
+        Returns the aggregated dashboard view of a single company.
+        Fields `boardStatus`, `supervisoryStatus` and `shareholderStatus` take values:
+        `"ok"`, `"warning"` or `"danger"`.
+        Fields `pkd` and `representation` are nullable when the data is not yet available.
+      operationId: getCompanyHomeView
+      security:
+        - cookieAuth: [ ]
       parameters:
         - name: id
           in: path
@@ -422,11 +463,38 @@ paths:
           example: "550e8400-e29b-41d4-a716-446655440000"
       responses:
         '200':
-          description: Company found
+          description: Company view returned
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CompanyDto'
+                $ref: '#/components/schemas/CompanyViewResponse'
+              example:
+                id: "550e8400-e29b-41d4-a716-446655440000"
+                name: "Testowa Sp. z o.o."
+                legalForm: "sp. z o.o."
+                krs: "0000123456"
+                nip: "1234567890"
+                regon: "123456789"
+                pkd: null
+                representation: null
+                address:
+                  streetName: "Marszałkowska"
+                  streetNumber: "10"
+                  propertyNumber: null
+                  postalCode: "00-001"
+                  city: "Warszawa"
+                shareCapital: 5000.00
+                sharesCountTotal: 100
+                shareBaseValue: 50.00
+                boardStatus: "ok"
+                supervisoryStatus: "ok"
+                shareholderStatus: "ok"
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
         '404':
           description: Company not found
           content:
@@ -1085,6 +1153,130 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/RoleConflictDto'
+
+    CompanyListItemDto:
+      type: object
+      description: |
+        Single entry in the user's company list.
+        `companyStatus` is an aggregate computed in one SQL CTE:
+        - `"ok"` – all data complete and consistent
+        - `"warning"` – incomplete personal data or supervisory board issue (art. 209 KSH)
+        - `"danger"` – board missing / shares do not balance / art. 214 KSH violation
+      required:
+        - id
+        - name
+        - companyStatus
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          example: "Testowa Sp. z o.o."
+        nip:
+          type: string
+          nullable: true
+          example: "1234567890"
+        companyStatus:
+          type: string
+          enum:
+            - ok
+            - warning
+            - danger
+          example: "ok"
+
+    CompanyViewResponse:
+      type: object
+      description: |
+        Aggregated dashboard view of a company returned by GET /companies/{id}.
+        Status fields (`boardStatus`, `supervisoryStatus`, `shareholderStatus`) take values:
+        `"ok"`, `"warning"` or `"danger"`.
+        Fields `pkd` and `representation` are nullable when the data is not yet available.
+      required:
+        - id
+        - name
+        - legalForm
+        - address
+        - shareCapital
+        - sharesCountTotal
+        - shareBaseValue
+        - boardStatus
+        - supervisoryStatus
+        - shareholderStatus
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          example: "Testowa Sp. z o.o."
+        legalForm:
+          type: string
+          example: "sp. z o.o."
+        krs:
+          type: string
+          nullable: true
+          example: "0000123456"
+        nip:
+          type: string
+          nullable: true
+          example: "1234567890"
+        regon:
+          type: string
+          nullable: true
+          example: "123456789"
+        pkd:
+          type: string
+          nullable: true
+          description: "Primary PKD activity code and description, e.g. \"62.01.Z – Opis\". Null when data is not yet available."
+          example: null
+        representation:
+          type: string
+          nullable: true
+          description: "Representation rules (zasada reprezentacji). Null when data is not yet available."
+          example: null
+        address:
+          $ref: '#/components/schemas/CompanyAddressDto'
+        shareCapital:
+          type: number
+          format: decimal
+          minimum: 0.01
+          example: 5000.00
+        sharesCountTotal:
+          type: integer
+          minimum: 1
+          example: 100
+        shareBaseValue:
+          type: number
+          format: decimal
+          minimum: 0.01
+          example: 50.00
+        boardStatus:
+          type: string
+          enum:
+            - ok
+            - warning
+            - danger
+          description: Aggregated status of the management board
+          example: "ok"
+        supervisoryStatus:
+          type: string
+          enum:
+            - ok
+            - warning
+            - danger
+          description: Aggregated status of the supervisory board
+          example: "ok"
+        shareholderStatus:
+          type: string
+          enum:
+            - ok
+            - warning
+            - danger
+          description: Aggregated status of the shareholders register
+          example: "ok"
 
     # ── KRS ──────────────────────────────────────────────────────────────────
 
