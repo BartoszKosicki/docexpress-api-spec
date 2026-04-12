@@ -439,6 +439,83 @@ paths:
 
 
 
+  /companies/{id}/members:
+    get:
+      tags:
+        - Company
+      summary: Get current members of company organs
+      description: |
+        Returns the current members of the company's management board (`board`),
+        supervisory board (`supervisory`) and liquidators (`liquidators`) grouped by section.
+
+        **"Current"** means: `deleted_at IS NULL AND (valid_to IS NULL OR valid_to >= today)`.
+
+        In normal operation one of `board` or `liquidators` will be empty – a company either
+        has a management board or is in liquidation, not both.
+      operationId: getCompanyMembers
+      security:
+        - cookieAuth: [ ]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique UUID identifier of the company
+          schema:
+            type: string
+            format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+      responses:
+        '200':
+          description: Members returned grouped by section
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyMembersResponse'
+              example:
+                board:
+                  - id: "aaaaaaaa-0000-0000-0000-000000000001"
+                    firstName: "Jan"
+                    secondName: null
+                    surname: "Kowalski"
+                    secondSurname: null
+                    role: "PREZES_ZARZADU"
+                    termFrom: "2022-01-15"
+                    termTo: null
+                  - id: "aaaaaaaa-0000-0000-0000-000000000002"
+                    firstName: "Anna"
+                    secondName: null
+                    surname: "Nowak"
+                    secondSurname: null
+                    role: "CZLONEK_ZARZADU"
+                    termFrom: "2023-03-01"
+                    termTo: null
+                supervisory:
+                  - id: "bbbbbbbb-0000-0000-0000-000000000001"
+                    firstName: "Piotr"
+                    secondName: null
+                    surname: "Wiśniewski"
+                    secondSurname: null
+                    role: "PRZEWODNICZACY"
+                    termFrom: "2022-01-15"
+                    termTo: "2027-01-14"
+                liquidators: [ ]
+        '401':
+          description: Not authenticated
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+        '404':
+          description: Company not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                status: 404
+                title: Not Found
+                detail: "Company not found"
+
   /companies/{id}:
     get:
       tags:
@@ -983,9 +1060,17 @@ components:
         firstName:
           type: string
           example: "Jan"
+        secondName:
+          type: string
+          nullable: true
+          example: null
         surname:
           type: string
           example: "Kowalski"
+        secondSurname:
+          type: string
+          nullable: true
+          example: null
         function:
           type: string
           example: "PREZES_ZARZADU"
@@ -1277,6 +1362,85 @@ components:
             - danger
           description: Aggregated status of the shareholders register
           example: "ok"
+
+    CompanyMemberDto:
+      type: object
+      description: |
+        Single member of a company organ (board, supervisory board or liquidator).
+        Returned as part of `CompanyMembersResponse`.
+      required:
+        - id
+        - firstName
+        - surname
+        - role
+        - termFrom
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUID of the board member record
+          example: "aaaaaaaa-0000-0000-0000-000000000001"
+        firstName:
+          type: string
+          example: "Jan"
+        secondName:
+          type: string
+          nullable: true
+          example: null
+        surname:
+          type: string
+          example: "Kowalski"
+        secondSurname:
+          type: string
+          nullable: true
+          example: null
+        role:
+          type: string
+          description: |
+            Member's function. Possible values:
+            - Board: `PREZES_ZARZADU`, `WICEPREZES_ZARZADU`, `CZLONEK_ZARZADU`
+            - Supervisory: `PRZEWODNICZACY`, `WICEPRZEWODNICZACY`, `CZLONEK`
+            - Liquidators: `LIKWIDATOR`
+          example: "PREZES_ZARZADU"
+        termFrom:
+          type: string
+          format: date
+          description: Start date of the appointment
+          example: "2022-01-15"
+        termTo:
+          type: string
+          format: date
+          nullable: true
+          description: End date of the term. Null means the appointment is indefinite.
+          example: null
+
+    CompanyMembersResponse:
+      type: object
+      description: |
+        Current members of a company's organs grouped by section.
+        Each section contains only records where `deleted_at IS NULL`
+        and `valid_to IS NULL OR valid_to >= today`.
+        In a normal company either `board` or `liquidators` will be empty.
+      required:
+        - board
+        - supervisory
+        - liquidators
+      properties:
+        board:
+          type: array
+          description: Active management board members (excludes liquidators)
+          items:
+            $ref: '#/components/schemas/CompanyMemberDto'
+        supervisory:
+          type: array
+          description: Active supervisory board members
+          items:
+            $ref: '#/components/schemas/CompanyMemberDto'
+        liquidators:
+          type: array
+          description: Active liquidators (function LIKWIDATOR from the board_members table)
+          items:
+            $ref: '#/components/schemas/CompanyMemberDto'
 
     # ── KRS ──────────────────────────────────────────────────────────────────
 
